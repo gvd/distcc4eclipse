@@ -1,0 +1,13 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Distcc Build Status
+Bundle-SymbolicName: com.ghvandoorn.distcc; singleton:=true
+Bundle-Version: 1.0.0
+Bundle-Activator: com.ghvandoorn.distcc.Activator
+Bundle-Vendor: g.h.vandoorn
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime
+Bundle-RequiredExecutionEnvironment: JavaSE-1.6
+Bundle-ActivationPolicy: lazy
+Export-Package: com.ghvandoorn.distcc,
+ com.ghvandoorn.distcc.views
