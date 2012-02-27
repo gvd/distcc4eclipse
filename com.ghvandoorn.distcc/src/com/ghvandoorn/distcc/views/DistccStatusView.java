@@ -56,9 +56,9 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	static class DccState {
 		
 		private String stateFilename = null;
-		private long mSize = 0;
-		private long mMagic = 0;
-		private long mPID = 0;
+		private long mSize = -1;
+		private long mMagic = -1;
+		private long mPID = -1;
 		private String mFilename = null;
 		private String mHost = null;
 		private int mSlot = -1;
@@ -88,15 +88,15 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 				}
 
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				try {
+					in.close();
+				} catch (IOException e1) {
+				}
 			} finally {
 				if (in != null) {
 					try {
 						in.close();
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
 					}
 				}			
 			}
@@ -174,6 +174,14 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		public void setStateFilename(String stateFilename) {
 			this.stateFilename = stateFilename;
 		}
+
+		public boolean isValid() {
+			if (mSize > 0 && mMagic >= 0 && mPID >= 0 && mSlot >= 0
+					&& !mHost.trim().isEmpty() && !mFilename.trim().isEmpty()) {
+				return true;
+			}
+			return false;
+		}
 	}
 	 
 	class ViewContentProvider implements IStructuredContentProvider {
@@ -227,7 +235,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 			final List<DccState> list = new ArrayList<DccState>();
 			for (File file : files) {
 				DccState state = new DccState(file.getAbsolutePath());
-				if (!state.getHost().trim().isEmpty() && !state.getFilename().trim().isEmpty()) {
+				if (state.isValid()) {
 					File process = new File("/proc/" + state.getCpid());
 					if (process.exists()) {
 						list.add(state);
