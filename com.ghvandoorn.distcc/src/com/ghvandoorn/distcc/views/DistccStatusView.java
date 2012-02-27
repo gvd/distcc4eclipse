@@ -88,10 +88,6 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 				}
 
 			} catch (IOException e) {
-				try {
-					in.close();
-				} catch (IOException e1) {
-				}
 			} finally {
 				if (in != null) {
 					try {
