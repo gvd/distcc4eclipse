@@ -10,8 +10,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import org.eclipse.jface.viewers.ColumnLabelProvider;
 import org.eclipse.jface.viewers.IStructuredContentProvider;
@@ -46,7 +44,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	public static final String DISTCC_STATE_LOCATION = System.getProperty("user.home") + "/.distcc/state/";
 
 	private TableViewer viewer;
-	private Timer mTimer = null;
+	private Thread mUpdateThread = null;
 	
 	// See http://distcc.sourcearchive.com/documentation/3.1-3.1build1/src_2state_8h-source.html
 	private enum DccPhase {
@@ -223,9 +221,10 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	        throw new IllegalArgumentException("Not comparable: " + e1 + " " + e2);
 	    }
 	}
-	
-	class UpdateTask extends TimerTask {
-        public void run() {
+
+	class UpdateThread implements Runnable {
+
+		private void update() {
 			File dir = new File(DISTCC_STATE_LOCATION);
 			File[] files = dir.listFiles();
 			final List<DccState> list = new ArrayList<DccState>();
@@ -245,13 +244,41 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 					}
 				}
 			});
-        }
-    }
+		}
+
+		@Override
+		public void run() {
+			while (!Thread.currentThread().isInterrupted()) {
+				update();
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {
+					return;
+				}
+			}
+		}
+	}
 
 	/**
 	 * The constructor.
 	 */
 	public DistccStatusView() {
+	}
+
+	private void start() {
+		File distccDir = new File(DISTCC_STATE_LOCATION);
+		if (distccDir.exists()) {
+			mUpdateThread = new Thread(new UpdateThread());
+			mUpdateThread.start();
+		} else {
+			System.err.println("Distcc state directory not found: " + DISTCC_STATE_LOCATION);
+		}
+	}
+
+	private void stop() {
+		if (mUpdateThread != null) {
+			mUpdateThread.interrupt();
+		}
 	}
 
 	/**
@@ -273,13 +300,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		// Create the help context id for the viewer's control
 		PlatformUI.getWorkbench().getHelpSystem().setHelp(viewer.getControl(), "com.ghvandoorn.distcc.viewer");
 
-		File distccDir = new File(DISTCC_STATE_LOCATION);
-		mTimer = new Timer();
-		if (distccDir.exists()) {
-			mTimer.schedule(new UpdateTask(), 0, 1000);
-		} else {
-			System.err.println("Distcc state directory not found: " + DISTCC_STATE_LOCATION);
-		}
+		start();
 	}
 	
 	@Override
@@ -361,7 +382,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 
 	@Override
 	public void partClosed(IWorkbenchPart part) {
-		mTimer.cancel();		
+		stop();
 	}
 
 	@Override
