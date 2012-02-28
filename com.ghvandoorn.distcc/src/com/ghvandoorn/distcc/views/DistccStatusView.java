@@ -53,7 +53,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 
 	static class DccState {
 		
-		private String stateFilename = null;
+		private String mStateFilename = null;
 		private long mSize = -1;
 		private long mMagic = -1;
 		private long mPID = -1;
@@ -61,15 +61,24 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		private String mHost = null;
 		private int mSlot = -1;
 		private DccPhase phase = DccPhase.UNKNOWN;
+		private long mModificationTime = 0;
 		private static final ByteOrder mByteOrder = ByteOrder.nativeOrder();
 
-		public DccState(String filename) {
-			this.setStateFilename(filename);
+		public DccState(File file) {
+			this.setStateFilename(file.getAbsolutePath());
+			mModificationTime = file.lastModified();
+			if (mModificationTime == 0L) {
+				return;
+			}
+			if ( (System.currentTimeMillis() - mModificationTime) > 60000) {
+				file.delete();
+				return;
+			}
 			DataInputStream in = null;
 			try {
 				in = new DataInputStream(
 						new BufferedInputStream(
-								new FileInputStream(filename)));
+								new FileInputStream(mStateFilename)));
 							
 				setSize(reverse(in.readLong()));			
 				setMagic(reverse(in.readLong()));
@@ -162,11 +171,11 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		}
 
 		public String getStateFilename() {
-			return stateFilename;
+			return mStateFilename;
 		}
 
 		public void setStateFilename(String stateFilename) {
-			this.stateFilename = stateFilename;
+			this.mStateFilename = stateFilename;
 		}
 
 		public boolean isValid() {
@@ -229,7 +238,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 			File[] files = dir.listFiles();
 			final List<DccState> list = new ArrayList<DccState>();
 			for (File file : files) {
-				DccState state = new DccState(file.getAbsolutePath());
+				DccState state = new DccState(file);
 				if (state.isValid()) {
 					File process = new File("/proc/" + state.getCpid());
 					if (process.exists()) {
