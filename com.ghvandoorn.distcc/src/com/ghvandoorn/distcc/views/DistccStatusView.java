@@ -100,7 +100,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 				}
 				in.read(str);
 				result.mHost = new String(str);
-				result.mHost = result.mFilename.trim();
+				result.mHost = result.mHost.trim();
 				if (result.mHost.isEmpty()) {
 					return null;
 				}
