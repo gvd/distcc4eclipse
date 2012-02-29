@@ -60,39 +60,57 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		private String mFilename = null;
 		private String mHost = null;
 		private int mSlot = -1;
-		private DccPhase phase = DccPhase.UNKNOWN;
+		private DccPhase mPhase = DccPhase.UNKNOWN;
 		private long mModificationTime = 0;
 		private static final ByteOrder mByteOrder = ByteOrder.nativeOrder();
 
-		public DccState(File file) {
-			this.setStateFilename(file.getAbsolutePath());
-			mModificationTime = file.lastModified();
-			if (mModificationTime == 0L) {
-				return;
+		public static DccState create(File file) {
+			DccState result = new DccState();
+			result.mStateFilename = file.getAbsolutePath();
+			result.mModificationTime = file.lastModified();
+			if (result.mModificationTime == 0L) {
+				return null;
 			}
-			if ( (System.currentTimeMillis() - mModificationTime) > 60000) {
+			if ( (System.currentTimeMillis() - result.mModificationTime) > 60000) {
 				file.delete();
-				return;
+				return null;
 			}
 			DataInputStream in = null;
 			try {
 				in = new DataInputStream(
 						new BufferedInputStream(
-								new FileInputStream(mStateFilename)));
-							
-				setSize(reverse(in.readLong()));			
-				setMagic(reverse(in.readLong()));
-				setCpid(reverse(in.readLong()));
+								new FileInputStream(result.mStateFilename)));
+
+
+				result.mSize = reverse(in.readLong());
+				if (result.mSize != 296) { // Version change?
+					return null;
+				}
+				result.mMagic = reverse(in.readLong());
+				if (result.mMagic != 0x44494800) {  // Version change?
+					return null;
+				}
+				result.mPID = reverse(in.readLong());
 				byte[] str = new byte[128];
 				in.read(str);
-				setFilename(new String(str));
-				in.read(str);
-				setHost(new String(str));
-				setSlot(reverse(in.readInt()));
-				int phase_nr = reverse(in.readInt());
-				if (phase_nr < DccPhase.values().length) {
-					setPhase(DccPhase.values()[phase_nr]);
+				result.mFilename = new String(str);
+				result.mFilename = result.mFilename.trim();
+				if (result.mFilename.isEmpty()) {
+					return null;
 				}
+				in.read(str);
+				result.mHost = new String(str);
+				result.mHost = result.mFilename.trim();
+				if (result.mHost.isEmpty()) {
+					return null;
+				}
+				result.mSlot = reverse(in.readInt());
+				int phase_nr = reverse(in.readInt());
+				if (phase_nr >= DccPhase.values().length) {
+					phase_nr = DccPhase.values().length - 1;
+				}
+				result.mPhase = DccPhase.values()[phase_nr];
+				return result;
 
 			} catch (IOException e) {
 			} finally {
@@ -101,89 +119,44 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 						in.close();
 					} catch (IOException e) {
 					}
-				}			
+				}
 			}
+			return null;
 		}
-		
-		long reverse(long val) {
+		public DccState() {
+		}
+		static long reverse(long val) {
 			ByteBuffer bbuf = ByteBuffer.allocate(8);
 			return bbuf.order(ByteOrder.BIG_ENDIAN).putLong(val).order(mByteOrder).getLong(0);
 		}
-		int reverse(int val) {
+		static int reverse(int val) {
 			ByteBuffer bbuf = ByteBuffer.allocate(4);
 			return bbuf.order(ByteOrder.BIG_ENDIAN).putInt(val).order(mByteOrder).getInt(0);
 		}
-
 		public String getFilename() {
 			return mFilename;
 		}
-
-		public void setFilename(String filename) {
-			this.mFilename = filename;
-		}
-
-		public long getSize() {
-			return mSize;
-		}
-
-		public void setSize(long size) {
-			this.mSize = size;
-		}
-
-		public long getCpid() {
+		public long getPID() {
 			return mPID;
 		}
-
-		public void setCpid(long cpid) {
-			this.mPID = cpid;
-		}
-
 		public long getMagic() {
 			return mMagic;
 		}
-
-		public void setMagic(long magic) {
-			this.mMagic = magic;
-		}
-
 		public String getHost() {
 			return mHost;
 		}
-
-		public void setHost(String host) {
-			this.mHost = host;
-		}
-
 		public int getSlot() {
 			return mSlot;
 		}
-
-		public void setSlot(int slot) {
-			this.mSlot = slot;
-		}
-
 		public DccPhase getPhase() {
-			return phase;
+			return mPhase;
 		}
-
-		public void setPhase(DccPhase phase) {
-			this.phase = phase;
-		}
-
 		public String getStateFilename() {
 			return mStateFilename;
 		}
-
-		public void setStateFilename(String stateFilename) {
-			this.mStateFilename = stateFilename;
-		}
-
-		public boolean isValid() {
-			if (mSize > 0 && mMagic >= 0 && mPID >= 0 && mSlot >= 0
-					&& !mHost.trim().isEmpty() && !mFilename.trim().isEmpty()) {
-				return true;
-			}
-			return false;
+		public boolean isRunning() {
+			File process = new File("/proc/" + mPID);
+			return process.exists();
 		}
 	}
 	 
@@ -236,14 +209,14 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		private void update() {
 			File dir = new File(DISTCC_STATE_LOCATION);
 			File[] files = dir.listFiles();
+			if (files == null) {
+				return;
+			}
 			final List<DccState> list = new ArrayList<DccState>();
 			for (File file : files) {
-				DccState state = new DccState(file);
-				if (state.isValid()) {
-					File process = new File("/proc/" + state.getCpid());
-					if (process.exists()) {
-						list.add(state);
-					}
+				DccState state = DccState.create(file);
+				if (state != null && state.isRunning()) {
+					list.add(state);
 				}
 			}
 			Display.getDefault().asyncExec(new Runnable() {
@@ -367,7 +340,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 			@Override
 			public String getText(Object element) {
 				DccState state = (DccState) element;
-				return String.valueOf(state.getCpid());
+				return String.valueOf(state.getPID());
 			}
 		});
 	}
@@ -401,6 +374,5 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	@Override
 	public void partOpened(IWorkbenchPart part) {
 		// TODO Auto-generated method stub
-		
 	}
 }
