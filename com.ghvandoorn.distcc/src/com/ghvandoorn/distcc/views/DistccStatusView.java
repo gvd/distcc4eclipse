@@ -48,7 +48,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	
 	// See http://distcc.sourcearchive.com/documentation/3.1-3.1build1/src_2state_8h-source.html
 	private enum DccPhase {
-		STARTUP, BLOCKED, CONNECT, CPP, SEND, COMPILE, RECEIVE, DONE, UNKNOWN
+		STARTUP, BLOCKED, CONNECT, CPP, SEND, COMPILE, RECEIVE, DONE
 	}
 
 	static class DccState {
@@ -60,7 +60,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 		private String mFilename = null;
 		private String mHost = null;
 		private int mSlot = -1;
-		private DccPhase mPhase = DccPhase.UNKNOWN;
+		private DccPhase mPhase = DccPhase.COMPILE;
 		private long mModificationTime = 0;
 		private static final ByteOrder mByteOrder = ByteOrder.nativeOrder();
 
@@ -106,10 +106,9 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 				}
 				result.mSlot = reverse(in.readInt());
 				int phase_nr = reverse(in.readInt());
-				if (phase_nr >= DccPhase.values().length) {
-					phase_nr = DccPhase.values().length - 1;
+				if (phase_nr >= 0 && phase_nr < DccPhase.values().length) {
+					result.mPhase = DccPhase.values()[phase_nr];
 				}
-				result.mPhase = DccPhase.values()[phase_nr];
 				return result;
 
 			} catch (IOException e) {
