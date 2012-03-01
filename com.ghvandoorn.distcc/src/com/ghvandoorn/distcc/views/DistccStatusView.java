@@ -44,7 +44,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	public static final String DISTCC_STATE_LOCATION = System.getProperty("user.home") + "/.distcc/state/";
 
 	private TableViewer viewer;
-	private Thread mUpdateThread = null;
+	private UpdateWorker mUpdateThread = null;
 	
 	// See http://distcc.sourcearchive.com/documentation/3.1-3.1build1/src_2state_8h-source.html
 	private enum DccPhase {
@@ -203,7 +203,12 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	    }
 	}
 
-	class UpdateThread implements Runnable {
+	class UpdateWorker extends Thread {
+		private volatile boolean mReadyToStop = false;
+
+		public void finish() {
+			mReadyToStop = true;
+		}
 
 		private void update() {
 			File dir = new File(DISTCC_STATE_LOCATION);
@@ -229,12 +234,11 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 
 		@Override
 		public void run() {
-			while (!Thread.currentThread().isInterrupted()) {
+			while (!mReadyToStop) {
 				update();
 				try {
 					Thread.sleep(1000);
 				} catch (InterruptedException e) {
-					return;
 				}
 			}
 		}
@@ -249,7 +253,7 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 	private void start() {
 		File distccDir = new File(DISTCC_STATE_LOCATION);
 		if (distccDir.exists()) {
-			mUpdateThread = new Thread(new UpdateThread());
+			mUpdateThread = new UpdateWorker();
 			mUpdateThread.start();
 		} else {
 			System.err.println("Distcc state directory not found: " + DISTCC_STATE_LOCATION);
@@ -258,7 +262,8 @@ public class DistccStatusView extends ViewPart implements IPartListener {
 
 	private void stop() {
 		if (mUpdateThread != null) {
-			mUpdateThread.interrupt();
+			mUpdateThread.finish();
+			mUpdateThread = null;
 		}
 	}
 
